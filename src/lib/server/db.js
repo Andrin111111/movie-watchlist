@@ -1,29 +1,22 @@
-// src/lib/server/db.js
-import { MongoClient, ObjectId } from 'mongodb';
-import { env } from '$env/dynamic/private';
+import { MongoClient, ObjectId } from "mongodb";
+import { env } from "$env/dynamic/private";
 
-// Client nur einmal initialisieren
 const client = new MongoClient(env.DB_URI);
 let _db;
 
 async function getDb() {
   if (!_db) {
     await client.connect();
-    _db = client.db('ScreenStackDB'); // dein bisheriger DB-Name
+    _db = client.db("ScreenStackDB"); // dein DB-Name
   }
   return _db;
 }
 
-//////////////////////////////////////////
-// Movies
-//////////////////////////////////////////
-
-// Get all movies
+// Movies CRUD-Funktionen
 async function getMovies() {
   try {
     const db = await getDb();
-    const collection = db.collection('movies');
-    const movies = await collection.find({}).toArray();
+    const movies = await db.collection("movies").find({}).toArray();
     return movies.map((m) => ({ ...m, _id: m._id.toString() }));
   } catch (error) {
     console.log(error);
@@ -31,12 +24,10 @@ async function getMovies() {
   }
 }
 
-// Get movie by id
 async function getMovie(id) {
   try {
     const db = await getDb();
-    const collection = db.collection('movies');
-    const movie = await collection.findOne({ _id: new ObjectId(id) });
+    const movie = await db.collection("movies").findOne({ _id: new ObjectId(id) });
     return movie ? { ...movie, _id: movie._id.toString() } : null;
   } catch (error) {
     console.log(error.message);
@@ -44,19 +35,14 @@ async function getMovie(id) {
   }
 }
 
-// create movie
 async function createMovie(movie) {
-  const doc = {
-    poster: '/images/placeholder.jpg',
-    actors: [],
-    watchlist: false,
-    ...movie
-  };
+  movie.poster = "/images/placeholder.jpg";
+  movie.actors = [];
+  movie.watchlist = false;
 
   try {
     const db = await getDb();
-    const collection = db.collection('movies');
-    const result = await collection.insertOne(doc);
+    const result = await db.collection("movies").insertOne(movie);
     return result.insertedId.toString();
   } catch (error) {
     console.log(error.message);
@@ -64,19 +50,14 @@ async function createMovie(movie) {
   }
 }
 
-// update movie
 async function updateMovie(movie) {
   try {
     const id = movie._id;
     const { _id, ...update } = movie;
-
     const db = await getDb();
-    const collection = db.collection('movies');
-    const result = await collection.updateOne(
-      { _id: new ObjectId(id) },
-      { $set: update }
-    );
-
+    const result = await db
+      .collection("movies")
+      .updateOne({ _id: new ObjectId(id) }, { $set: update });
     return result.matchedCount ? id : null;
   } catch (error) {
     console.log(error.message);
@@ -84,12 +65,10 @@ async function updateMovie(movie) {
   }
 }
 
-// delete movie by id
 async function deleteMovie(id) {
   try {
     const db = await getDb();
-    const collection = db.collection('movies');
-    const result = await collection.deleteOne({ _id: new ObjectId(id) });
+    const result = await db.collection("movies").deleteOne({ _id: new ObjectId(id) });
     return result.deletedCount ? id : null;
   } catch (error) {
     console.log(error.message);
