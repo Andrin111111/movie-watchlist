@@ -1,10 +1,18 @@
-import { MongoClient, ObjectId } from "mongodb"; // See https://www.mongodb.com/docs/drivers/node/current/quick-start/
-import { DB_URI } from "$env/static/private";
+// src/lib/server/db.js
+import { MongoClient, ObjectId } from 'mongodb';
+import { env } from '$env/dynamic/private';
 
-const client = new MongoClient(DB_URI);
+// Client nur einmal initialisieren
+const client = new MongoClient(env.DB_URI);
+let _db;
 
-await client.connect();
-const db = client.db("ScreenStackDB"); // select database
+async function getDb() {
+  if (!_db) {
+    await client.connect();
+    _db = client.db('ScreenStackDB'); // dein bisheriger DB-Name
+  }
+  return _db;
+}
 
 //////////////////////////////////////////
 // Movies
@@ -12,137 +20,82 @@ const db = client.db("ScreenStackDB"); // select database
 
 // Get all movies
 async function getMovies() {
-  let movies = [];
   try {
-    const collection = db.collection("movies");
-
-    // You can specify a query/filter here
-    // See https://www.mongodb.com/docs/drivers/node/current/fundamentals/crud/query-document/
-    const query = {};
-
-    // Get all objects that match the query
-    movies = await collection.find(query).toArray();
-    movies.forEach((movie) => {
-      movie._id = movie._id.toString(); // convert ObjectId to String
-    });
+    const db = await getDb();
+    const collection = db.collection('movies');
+    const movies = await collection.find({}).toArray();
+    return movies.map((m) => ({ ...m, _id: m._id.toString() }));
   } catch (error) {
     console.log(error);
-    // TODO: errorhandling
+    return [];
   }
-  return movies;
 }
 
 // Get movie by id
 async function getMovie(id) {
-  let movie = null;
   try {
-    const collection = db.collection("movies");
-    const query = { _id: new ObjectId(id) }; // filter by id
-    movie = await collection.findOne(query);
-
-    if (!movie) {
-      console.log("No movie with id " + id);
-      // TODO: errorhandling
-    } else {
-      movie._id = movie._id.toString(); // convert ObjectId to String
-    }
+    const db = await getDb();
+    const collection = db.collection('movies');
+    const movie = await collection.findOne({ _id: new ObjectId(id) });
+    return movie ? { ...movie, _id: movie._id.toString() } : null;
   } catch (error) {
-    // TODO: errorhandling
     console.log(error.message);
+    return null;
   }
-  return movie;
 }
 
 // create movie
-// Example movie object:
-/* 
-{ 
-  title: "Das Geheimnis von Altura",
-  year: 2024,
-  length: "120 Minuten"
-} 
-*/
 async function createMovie(movie) {
-  movie.poster = "/images/placeholder.jpg"; // default poster
-  movie.actors = [];
-  movie.watchlist = false;
+  const doc = {
+    poster: '/images/placeholder.jpg',
+    actors: [],
+    watchlist: false,
+    ...movie
+  };
+
   try {
-    const collection = db.collection("movies");
-    const result = await collection.insertOne(movie);
-    return result.insertedId.toString(); // convert ObjectId to String
+    const db = await getDb();
+    const collection = db.collection('movies');
+    const result = await collection.insertOne(doc);
+    return result.insertedId.toString();
   } catch (error) {
-    // TODO: errorhandling
     console.log(error.message);
+    return null;
   }
-  return null;
 }
 
 // update movie
-// Example movie object:
-/* 
-{ 
-  _id: "6630e72c95e12055f661ff13",
-  title: "Das Geheimnis von Altura",
-  year: 2024,
-  length: "120 Minuten",
-  actors: [
-    "Lena Herzog",
-    "Maximilian Schröder",
-    "Sophia Neumann"
-  ],
-  poster: "/images/Altura.png",
-  watchlist: false
-} 
-*/
-// returns: id of the updated movie or null, if movie could not be updated
 async function updateMovie(movie) {
   try {
-    let id = movie._id;
-    delete movie._id; // delete the _id from the object, because the _id cannot be updated
-    const collection = db.collection("movies");
-    const query = { _id: new ObjectId(id) }; // filter by id
-    const result = await collection.updateOne(query, { $set: movie });
+    const id = movie._id;
+    const { _id, ...update } = movie;
 
-    if (result.matchedCount === 0) {
-      console.log("No movie with id " + id);
-      // TODO: errorhandling
-    } else {
-      console.log("Movie with id " + id + " has been updated.");
-      return id;
-    }
+    const db = await getDb();
+    const collection = db.collection('movies');
+    const result = await collection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: update }
+    );
+
+    return result.matchedCount ? id : null;
   } catch (error) {
-    // TODO: errorhandling
     console.log(error.message);
+    return null;
   }
-  return null;
 }
 
 // delete movie by id
-// returns: id of the deleted movie or null, if movie could not be deleted
 async function deleteMovie(id) {
   try {
-    const collection = db.collection("movies");
-    const query = { _id: new ObjectId(id) }; // filter by id
-    const result = await collection.deleteOne(query);
-
-    if (result.deletedCount === 0) {
-      console.log("No movie with id " + id);
-    } else {
-      console.log("Movie with id " + id + " has been successfully deleted.");
-      return id;
-    }
+    const db = await getDb();
+    const collection = db.collection('movies');
+    const result = await collection.deleteOne({ _id: new ObjectId(id) });
+    return result.deletedCount ? id : null;
   } catch (error) {
-    // TODO: errorhandling
     console.log(error.message);
+    return null;
   }
-  return null;
 }
 
-// export all functions so that they can be used in other files
-export default {
-  getMovies,
-  getMovie,
-  createMovie,
-  updateMovie,
-  deleteMovie,
-};
+export default { getMovies, getMovie, createMovie, updateMovie, deleteMovie };
+export { ObjectId };
